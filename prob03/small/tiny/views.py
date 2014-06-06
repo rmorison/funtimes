@@ -31,7 +31,11 @@ class FeedItemEncoder(json.JSONEncoder):
       return [o for o in obj]
 
     if isinstance(obj, RegisteredUser):
-      return obj.user.username
+      return {
+        'username': obj.user.username,
+        'password': 'aoeu',
+        'login-at': '/admin/',
+      }
 
     if isinstance(obj, FeedItem):
       return {
@@ -43,13 +47,18 @@ class FeedItemEncoder(json.JSONEncoder):
     return super(FeedItemEncoder, self).default(obj)
 
 def feed(request):
+  if request.user.is_anonymous():
+    return HttpResponse(json.dumps({
+      'status': 'Failure - You should login',
+      'available-logins': RegisteredUser.objects.all()
+    }, cls=FeedItemEncoder))
+  # For time sake, I'm going to skip making this pretty pretty.
   following = RegisteredUser.objects.get(user=request.user).tracking.all()
   following_values = following.values_list('id', flat=True)
   FILTER_TYPES = {
+    'e': lambda: FeedItem.objects.all(),
     'm': lambda: FeedItem.objects.filter(user=request.user),
-    # For time sake, I'm going to skip making this query optimal.
     'f': lambda: FeedItem.objects.filter(user__pk__in=following_values),
-    'e': lambda: FeedItem.objects.all(), 
   }
   filter_type = request.GET.get('filterOn', FILTER_TYPES.keys()[0])
   if filter_type not in FILTER_TYPES.keys():
@@ -59,7 +68,7 @@ def feed(request):
     'status': 'OK',
     'data': {
       'following': following,
-      'content': FILTER_TYPES.get(filter_type, 'e')(),
+      'content': FILTER_TYPES.get(filter_type)(),
     }
   }, cls=FeedItemEncoder), content_type="application/json")
 
