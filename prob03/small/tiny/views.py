@@ -58,7 +58,10 @@ def feed(request):
   FILTER_TYPES = {
     'e': lambda: FeedItem.objects.all(),
     'm': lambda: FeedItem.objects.filter(user=request.user),
-    'f': lambda: FeedItem.objects.filter(user__pk__in=following_values),
+    # There is probably a better way to do this.
+    'f': lambda: FeedItem.objects.filter(user__pk__in=[
+      r.user.pk for r in RegisteredUser.objects.filter(pk__in=following_values)
+      ]),
   }
   filter_type = request.GET.get('filterOn', FILTER_TYPES.keys()[0])
   if filter_type not in FILTER_TYPES.keys():
@@ -67,6 +70,12 @@ def feed(request):
   return HttpResponse(json.dumps({
     'status': 'OK',
     'data': {
+      'additional_views': [
+        '?filterOn='.join([reverse('tiny-feed'), key])
+          for key in FILTER_TYPES.keys()
+      ],
+      'current-filter': filter_type,
+      'you-are': RegisteredUser.objects.get(user=request.user),
       'following': following,
       'content': FILTER_TYPES.get(filter_type)(),
     }
